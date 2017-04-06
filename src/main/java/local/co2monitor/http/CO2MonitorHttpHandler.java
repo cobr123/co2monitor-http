@@ -40,6 +40,10 @@ public class CO2MonitorHttpHandler implements HttpHandler {
             "            type: 'week',\n" +
             "            text: '1w'\n" +
             "        }, {\n" +
+            "            count: 1,\n" +
+            "            type: 'month',\n" +
+            "            text: '1m'\n" +
+            "        }, {\n" +
             "            type: 'all',\n" +
             "            text: 'All'\n" +
             "        }],\n" +
