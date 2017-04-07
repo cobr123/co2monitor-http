@@ -38,9 +38,19 @@ public class CO2MonitorDataHttpHandler implements HttpHandler {
         }
     }
 
+
+    private static String nvl(final String value, final String defValue) {
+        if(value == null || value.isEmpty()){
+            return defValue;
+        } else {
+            return value;
+        }
+    }
+
     public static String getData() {
         final StringBuilder sb = new StringBuilder();
-        final File dir = new File("d:\\co2mini-data-logger\\");
+        final String loggerDir = nvl(System.getenv("co2mini-data-logger"),"d:\\co2mini-data-logger\\");
+        final File dir = new File(loggerDir);
         final File[] yearDirs = dir.listFiles();
 
         int cnt = 0;
