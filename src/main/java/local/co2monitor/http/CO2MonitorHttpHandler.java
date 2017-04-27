@@ -5,6 +5,8 @@ import com.sun.net.httpserver.HttpHandler;
 
 import java.io.IOException;
 import java.io.OutputStream;
+import java.text.SimpleDateFormat;
+import java.util.Date;
 
 /**
  * Created by cobr123 on 05.04.2017.
@@ -19,13 +21,40 @@ public class CO2MonitorHttpHandler implements HttpHandler {
             "<body>\n" +
             "    <div id=\"container\" style=\"height: 80%; width: 100%\"></div>\n" +
             "    <script>\n" +
+            "/**\n" +
+            " * Load new data depending on the selected min and max\n" +
+            " */\n" +
+            "function afterSetExtremes(e) {\n" +
+            "    var chart = Highcharts.charts[0];\n" +
+            "    chart.showLoading('Loading data from server...');\n" +
+            "    $.getJSON('/co2monitor/data?start=' + Math.round(e.min) + '&end=' + Math.round(e.max), function (data) {\n" +
+            "        chart.series[0].setData(data.map(function(val){return [val[0],val[1]];}));\n" +
+            "        chart.series[1].setData(data.map(function(val){return [val[0],val[2]];}));\n" +
+            "        chart.hideLoading();\n" +
+            "    });\n" +
+            "}\n" +
             "Highcharts.setOptions({\n" +
             "    global: {\n" +
             "        useUTC: false\n" +
             "    }\n" +
             "});\n" +
             "  $.getJSON('/co2monitor/data', function (data) {\n" +
-            "    Highcharts.stockChart('container', {\n" +
+            "    // Add a null value for the end date\n" +
+            "    data = [].concat(data, [[new Date().getTime(), null, null, null, null]]);\n" +
+            "\n" +
+            "    var chart = Highcharts.stockChart('container', {\n" +
+            "    chart: {\n" +
+            "        zoomType: 'x'\n" +
+            "    },\n" +
+            "    navigator: {\n" +
+            "        adaptToUpdatedData: false,\n" +
+            "        series: {\n" +
+            "            data: data\n" +
+            "        }\n" +
+            "    },\n" +
+            "    scrollbar: {\n" +
+            "        liveRedraw: false\n" +
+            "    },\n" +
             "    rangeSelector: {\n" +
             "        buttons: [{\n" +
             "            count: 1,\n" +
@@ -47,9 +76,17 @@ public class CO2MonitorHttpHandler implements HttpHandler {
             "            type: 'all',\n" +
             "            text: 'All'\n" +
             "        }],\n" +
+            "        inputEnabled: false, // it supports only days\n" +
             "        selected: 0\n" +
             "    },\n" +
+            "        xAxis: {\n" +
+            "            events: {\n" +
+            "                afterSetExtremes: afterSetExtremes\n" +
+            "            },\n" +
+            "            minRange: 3600 * 1000 // one hour\n" +
+            "        },\n" +
             "        yAxis: [{\n" +
+            "            floor: 0,\n" +
             "            title: {\n" +
             "                text: 'ppm'\n" +
             "            },\n" +
@@ -72,8 +109,12 @@ public class CO2MonitorHttpHandler implements HttpHandler {
             "    }],\n" +
             "        series: [{\n" +
             "            name: 'ppm',\n" +
-            "            data: data.map(function(val){return [val[0],val[1]];})\n" +
-            "        },{\n" +
+            "            data: data.map(function(val){return [val[0],val[1]];}),\n" +
+            "            dataGrouping: {\n" +
+            "                enabled: false\n" +
+            "            }\n" +
+            "        },\n" +
+            "       {\n" +
             "            yAxis: 1,\n" +
             "            name: 'temp',\n" +
             "           tooltip: {\n" +
@@ -81,7 +122,10 @@ public class CO2MonitorHttpHandler implements HttpHandler {
             "               valueSuffix: ' C'\n" +
             "           },\n" +
             "            visible: false,\n" +
-            "            data: data.map(function(val){return [val[0],val[2]];})\n" +
+            "            data: data.map(function(val){return [val[0],val[2]];}),\n" +
+            "            dataGrouping: {\n" +
+            "                enabled: false\n" +
+            "            }\n" +
             "        }],\n" +
             "    legend: {\n" +
             "        enabled: true\n" +
@@ -95,7 +139,8 @@ public class CO2MonitorHttpHandler implements HttpHandler {
             "      enabled: false\n" +
             "    }\n" +
             "    });\n" +
-            "  });" +
+            "   chart.xAxis[0].setExtremes(new Date().getTime() - 3600 * 1000, new Date().getTime());\n" +
+            "  });\n" +
             "    </script>\n" +
             "</body>\n" +
             "</html>";

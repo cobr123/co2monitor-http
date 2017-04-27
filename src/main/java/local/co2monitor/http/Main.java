@@ -8,18 +8,17 @@ import java.io.IOException;
 import java.io.OutputStream;
 import java.net.InetSocketAddress;
 
-
 /**
  * Created by cobr123 on 05.04.2017.
  */
 final public class Main {
     public static void main(String[] args) throws IOException {
-        HttpServer server = HttpServer.create(new InetSocketAddress(8080),1);
-        server.createContext("/", new HttpHandler(){
+        HttpServer server = HttpServer.create(new InetSocketAddress(8080), 1);
+        server.createContext("/", new HttpHandler() {
             public void handle(final HttpExchange t) throws IOException {
                 final String response = "<html><header><META HTTP-EQUIV=REFRESH CONTENT=\"1; URL=/co2monitor\"></header></html>";
                 t.sendResponseHeaders(200, response.length());
-                try(final OutputStream os = t.getResponseBody()){
+                try (final OutputStream os = t.getResponseBody()) {
                     os.write(response.getBytes());
                 }
             }

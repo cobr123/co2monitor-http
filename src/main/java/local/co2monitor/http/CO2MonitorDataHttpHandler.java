@@ -13,6 +13,8 @@ import java.text.DateFormat;
 import java.text.ParseException;
 import java.text.SimpleDateFormat;
 import java.util.Calendar;
+import java.util.HashMap;
+import java.util.Map;
 
 /**
  * Created by cobr123 on 05.04.2017.
@@ -24,36 +26,51 @@ public class CO2MonitorDataHttpHandler implements HttpHandler {
 
     private static final DateFormat df = new SimpleDateFormat("dd.MM.yyyy H:m:s");
 
-    public void handle(final HttpExchange t) throws IOException {
+    public void handle(final HttpExchange httpExchange) throws IOException {
         try {
-            final String response = getData();
-            t.getResponseHeaders().set(HEADER_CONTENT_TYPE, String.format("application/json; charset=%s", CHARSET));
+            final String response = getData(queryToMap(httpExchange.getRequestURI().getQuery()));
+            httpExchange.getResponseHeaders().set(HEADER_CONTENT_TYPE, String.format("application/json; charset=%s", CHARSET));
             final byte[] rawResponseBody = response.getBytes(CHARSET);
-            t.sendResponseHeaders(STATUS_OK, rawResponseBody.length);
-            t.getResponseBody().write(rawResponseBody);
+            httpExchange.sendResponseHeaders(STATUS_OK, rawResponseBody.length);
+            httpExchange.getResponseBody().write(rawResponseBody);
         } catch (final Exception e) {
             e.printStackTrace();
         } finally {
-            t.close();
+            httpExchange.close();
         }
     }
 
+    private Map<String, String> queryToMap(final String query) {
+        final Map<String, String> result = new HashMap<>();
+        if (query != null) {
+            for (final String param : query.split("&")) {
+                final String pair[] = param.split("=");
+                if (pair.length > 1) {
+                    result.put(pair[0], pair[1]);
+                } else {
+                    result.put(pair[0], "");
+                }
+            }
+        }
+        return result;
+    }
 
     private static String nvl(final String value, final String defValue) {
-        if(value == null || value.isEmpty()){
+        if (value == null || value.isEmpty()) {
             return defValue;
         } else {
             return value;
         }
     }
 
-    public static String getData() {
+    public static String getData(final Map<String, String> queryParams) {
+        final long startTimeInMillis = Long.parseLong(queryParams.getOrDefault("start", "0"));
+        final long endTimeInMillis = Long.parseLong(queryParams.getOrDefault("end", "1"));
         final StringBuilder sb = new StringBuilder();
-        final String loggerDir = nvl(System.getenv("co2mini-data-logger"),"d:\\co2mini-data-logger\\");
+        final String loggerDir = nvl(System.getenv("co2mini-data-logger"), "d:\\co2mini-data-logger\\");
         final File dir = new File(loggerDir);
         final File[] yearDirs = dir.listFiles();
 
-        int cnt = 0;
         sb.append("[");
         if (yearDirs != null) {
             for (final File yearDir : yearDirs) {
@@ -68,11 +85,14 @@ public class CO2MonitorDataHttpHandler implements HttpHandler {
                                         if (dayFile.isFile()) {
                                             if (dayFile.getName().endsWith(".CSV")) {
                                                 try {
-                                                    if (cnt > 0) {
+                                                    if (sb.length() > 1) {
                                                         sb.append(",");
                                                     }
-                                                    readCSVFile(sb, dayFile.getName().split("\\.")[0] + "." + monthDir.getName() + "." + yearDir.getName(), dayFile.toPath());
-                                                    ++cnt;
+                                                    readCSVFile(sb, dayFile.getName().split("\\.")[0] + "." + monthDir.getName() + "." + yearDir.getName(), dayFile.toPath(), startTimeInMillis, endTimeInMillis);
+
+                                                    if (sb.charAt(sb.length() - 1) == ',') {
+                                                        sb.deleteCharAt(sb.length() - 1);
+                                                    }
                                                 } catch (final Exception e) {
                                                     e.printStackTrace();
                                                 }
@@ -90,27 +110,36 @@ public class CO2MonitorDataHttpHandler implements HttpHandler {
         return sb.toString();
     }
 
-    public static void readCSVFile(final StringBuilder sb, final String ddMMyyyy, final Path filePath) throws IOException, ParseException {
+    public static void readCSVFile(
+            final StringBuilder sb
+            , final String ddMMyyyy
+            , final Path filePath
+            , final long startTimeInMillis
+            , final long endTimeInMillis
+    ) throws IOException {
         final Calendar cal = Calendar.getInstance();
-        int cnt = 0;
-        for (final String line : Files.readAllLines(filePath)) {
-            if (cnt > 1) {
-                sb.append(",");
-            }
-            if (cnt > 0) {
-                sb.append("[");
+        Files.readAllLines(filePath).stream().skip(1).forEach(line -> {
+            try {
                 //Time,Co2(PPM),Temp,RH(%)
                 //10:26:39,649,0.00,0.00
                 final String[] parts = line.split(",");
-                cal.setTime(df.parse(ddMMyyyy + " " + parts[0]));
-                sb.append(cal.getTimeInMillis());
-                sb.append(",");
-                sb.append(parts[1]);
-                sb.append(",");
-                sb.append(parts[2]);
-                sb.append("]");
+                if (parts.length == 4) {
+                    cal.setTime(df.parse(ddMMyyyy + " " + parts[0]));
+                    final long timeInMillis = cal.getTimeInMillis();
+                    if (timeInMillis >= startTimeInMillis && timeInMillis <= endTimeInMillis) {
+                        sb.append("[");
+                        sb.append(timeInMillis);
+                        sb.append(",");
+                        sb.append(parts[1]);
+                        sb.append(",");
+                        sb.append(parts[2]);
+                        sb.append("]");
+                        sb.append(",");
+                    }
+                }
+            } catch (ParseException e) {
+                e.printStackTrace();
             }
-            ++cnt;
-        }
+        });
     }
 }
