@@ -12,9 +12,7 @@ import java.nio.file.Path;
 import java.text.DateFormat;
 import java.text.ParseException;
 import java.text.SimpleDateFormat;
-import java.util.Calendar;
-import java.util.HashMap;
-import java.util.Map;
+import java.util.*;
 
 /**
  * Created by cobr123 on 05.04.2017.
@@ -63,9 +61,26 @@ public class CO2MonitorDataHttpHandler implements HttpHandler {
         }
     }
 
-    public static String getData(final Map<String, String> queryParams) {
+    private static long getStepInSeconds(final long range) {
+        if (range / 1000 < 24 * 60 * 60) {
+            return 1;
+        } else if (range / 1000 < 2 * 24 * 60 * 60) {
+            return 60;
+        } else if (range / 1000 < 14 * 24 * 60 * 60) {
+            return 5 * 60;
+        } else if (range / 1000 < 31 * 24 * 60 * 60) {
+            return 10 * 60;
+        } else {
+            return 15 * 60;
+        }
+    }
+
+    private static String getData(final Map<String, String> queryParams) {
         final long startTimeInMillis = Long.parseLong(queryParams.getOrDefault("start", "0"));
-        final long endTimeInMillis = Long.parseLong(queryParams.getOrDefault("end", "1"));
+        final long endTimeInMillis = Long.parseLong(queryParams.getOrDefault("end", "" + Calendar.getInstance().getTimeInMillis()));
+        final long range = endTimeInMillis - startTimeInMillis;
+        final long stepInSeconds = getStepInSeconds(range);
+
         final StringBuilder sb = new StringBuilder();
         final String loggerDir = nvl(System.getenv("co2mini-data-logger"), "d:\\co2mini-data-logger\\");
         final File dir = new File(loggerDir);
@@ -88,7 +103,7 @@ public class CO2MonitorDataHttpHandler implements HttpHandler {
                                                     if (sb.length() > 1) {
                                                         sb.append(",");
                                                     }
-                                                    readCSVFile(sb, dayFile.getName().split("\\.")[0] + "." + monthDir.getName() + "." + yearDir.getName(), dayFile.toPath(), startTimeInMillis, endTimeInMillis);
+                                                    readCSVFile(sb, dayFile.getName().split("\\.")[0] + "." + monthDir.getName() + "." + yearDir.getName(), dayFile.toPath(), startTimeInMillis, endTimeInMillis, stepInSeconds);
 
                                                     if (sb.charAt(sb.length() - 1) == ',') {
                                                         sb.deleteCharAt(sb.length() - 1);
@@ -110,15 +125,24 @@ public class CO2MonitorDataHttpHandler implements HttpHandler {
         return sb.toString();
     }
 
-    public static void readCSVFile(
+    private static void readCSVFile(
             final StringBuilder sb
             , final String ddMMyyyy
             , final Path filePath
             , final long startTimeInMillis
             , final long endTimeInMillis
+            , final long stepInSeconds
     ) throws IOException {
+        long prev = startTimeInMillis;
+        List<Double> ppm = new ArrayList<>();
+        List<Double> temperature = new ArrayList<>();
         final Calendar cal = Calendar.getInstance();
-        Files.readAllLines(filePath).stream().skip(1).forEach(line -> {
+        long toSkip = 1;
+        for (final String line : Files.readAllLines(filePath)) {
+            if (toSkip > 0) {
+                toSkip--;
+                continue;
+            }
             try {
                 //Time,Co2(PPM),Temp,RH(%)
                 //10:26:39,649,0.00,0.00
@@ -127,19 +151,38 @@ public class CO2MonitorDataHttpHandler implements HttpHandler {
                     cal.setTime(df.parse(ddMMyyyy + " " + parts[0]));
                     final long timeInMillis = cal.getTimeInMillis();
                     if (timeInMillis >= startTimeInMillis && timeInMillis <= endTimeInMillis) {
-                        sb.append("[");
-                        sb.append(timeInMillis);
-                        sb.append(",");
-                        sb.append(parts[1]);
-                        sb.append(",");
-                        sb.append(parts[2]);
-                        sb.append("]");
-                        sb.append(",");
+                        if ((timeInMillis - prev) / 1000 > stepInSeconds && !ppm.isEmpty()) {
+                            sb.append("[");
+                            sb.append(timeInMillis);
+                            sb.append(",");
+                            sb.append(ppm.stream().mapToDouble(l -> l).average().getAsDouble());
+                            sb.append(",");
+                            sb.append(temperature.stream().mapToDouble(l -> l).average().getAsDouble());
+                            sb.append("]");
+                            sb.append(",");
+
+                            ppm = new ArrayList<>();
+                            temperature = new ArrayList<>();
+                            prev = timeInMillis;
+                        } else {
+                            ppm.add(Double.parseDouble(parts[1]));
+                            temperature.add(Double.parseDouble(parts[2]));
+                        }
                     }
                 }
-            } catch (ParseException e) {
+            } catch (final ParseException e) {
                 e.printStackTrace();
             }
-        });
+        }
+        if (!ppm.isEmpty()) {
+            sb.append("[");
+            sb.append(prev);
+            sb.append(",");
+            sb.append(ppm.stream().mapToDouble(l -> l).average().getAsDouble());
+            sb.append(",");
+            sb.append(temperature.stream().mapToDouble(l -> l).average().getAsDouble());
+            sb.append("]");
+            sb.append(",");
+        }
     }
 }

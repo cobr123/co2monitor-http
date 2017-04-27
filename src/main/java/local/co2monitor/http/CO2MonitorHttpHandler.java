@@ -27,7 +27,9 @@ public class CO2MonitorHttpHandler implements HttpHandler {
             "function afterSetExtremes(e) {\n" +
             "    var chart = Highcharts.charts[0];\n" +
             "    chart.showLoading('Loading data from server...');\n" +
+            "    console.log('/co2monitor/data?start=' + Math.round(e.min) + '&end=' + Math.round(e.max));\n" +
             "    $.getJSON('/co2monitor/data?start=' + Math.round(e.min) + '&end=' + Math.round(e.max), function (data) {\n" +
+            "        console.log(data.length);\n" +
             "        chart.series[0].setData(data.map(function(val){return [val[0],val[1]];}));\n" +
             "        chart.series[1].setData(data.map(function(val){return [val[0],val[2]];}));\n" +
             "        chart.hideLoading();\n" +
