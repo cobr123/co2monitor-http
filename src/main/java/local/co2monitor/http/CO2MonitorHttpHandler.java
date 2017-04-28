@@ -63,6 +63,14 @@ public class CO2MonitorHttpHandler implements HttpHandler {
             "            type: 'hour',\n" +
             "            text: '1H'\n" +
             "        }, {\n" +
+            "            count: 4,\n" +
+            "            type: 'hour',\n" +
+            "            text: '4H'\n" +
+            "        }, {\n" +
+            "            count: 8,\n" +
+            "            type: 'hour',\n" +
+            "            text: '8H'\n" +
+            "        }, {\n" +
             "            count: 1,\n" +
             "            type: 'day',\n" +
             "            text: '1d'\n" +
