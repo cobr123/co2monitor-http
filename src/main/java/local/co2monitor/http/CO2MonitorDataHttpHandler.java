@@ -22,7 +22,8 @@ public class CO2MonitorDataHttpHandler implements HttpHandler {
     private static final int STATUS_OK = 200;
     private static final Charset CHARSET = StandardCharsets.UTF_8;
 
-    private static final DateFormat df = new SimpleDateFormat("dd.MM.yyyy H:m:s");
+    private static final DateFormat dateTimeFormat = new SimpleDateFormat("dd.MM.yyyy HH:mm:ss");
+    private static final DateFormat dateFormat = new SimpleDateFormat("dd.MM.yyyy");
 
     public void handle(final HttpExchange httpExchange) throws IOException {
         try {
@@ -75,6 +76,22 @@ public class CO2MonitorDataHttpHandler implements HttpHandler {
         }
     }
 
+    private static Date getZeroTimeDate(final Date date) {
+        final Calendar calendar = Calendar.getInstance();
+
+        calendar.setTime(date);
+        calendar.set(Calendar.HOUR_OF_DAY, 0);
+        calendar.set(Calendar.MINUTE, 0);
+        calendar.set(Calendar.SECOND, 0);
+        calendar.set(Calendar.MILLISECOND, 0);
+
+        return calendar.getTime();
+    }
+
+    private static boolean isWithinRange(final Date date, final long startTimeInMillis, final long endTimeInMillis) {
+        return !(date.before(getZeroTimeDate(new Date(startTimeInMillis))) || date.after(getZeroTimeDate(new Date(endTimeInMillis))));
+    }
+
     private static String getData(final Map<String, String> queryParams) {
         final long startTimeInMillis = Long.parseLong(queryParams.getOrDefault("start", "0"));
         final long endTimeInMillis = Long.parseLong(queryParams.getOrDefault("end", "" + Calendar.getInstance().getTimeInMillis()));
@@ -85,6 +102,7 @@ public class CO2MonitorDataHttpHandler implements HttpHandler {
         final String loggerDir = nvl(System.getenv("co2mini-data-logger"), "d:\\co2mini-data-logger\\");
         final File dir = new File(loggerDir);
         final File[] yearDirs = dir.listFiles();
+        final Calendar cal = Calendar.getInstance();
 
         sb.append("[");
         if (yearDirs != null) {
@@ -100,13 +118,17 @@ public class CO2MonitorDataHttpHandler implements HttpHandler {
                                         if (dayFile.isFile()) {
                                             if (dayFile.getName().endsWith(".CSV")) {
                                                 try {
-                                                    if (sb.length() > 1) {
-                                                        sb.append(",");
-                                                    }
-                                                    readCSVFile(sb, dayFile.getName().split("\\.")[0] + "." + monthDir.getName() + "." + yearDir.getName(), dayFile.toPath(), startTimeInMillis, endTimeInMillis, stepInSeconds);
+                                                    final String ddMMyyyy = dayFile.getName().split("\\.")[0] + "." + monthDir.getName() + "." + yearDir.getName();
+                                                    cal.setTime(dateFormat.parse(ddMMyyyy));
+                                                    if (isWithinRange(cal.getTime(), startTimeInMillis, endTimeInMillis)) {
+                                                        if (sb.length() > 1) {
+                                                            sb.append(",");
+                                                        }
+                                                        readCSVFile(sb, ddMMyyyy, dayFile.toPath(), startTimeInMillis, endTimeInMillis, stepInSeconds);
 
-                                                    if (sb.charAt(sb.length() - 1) == ',') {
-                                                        sb.deleteCharAt(sb.length() - 1);
+                                                        if (sb.charAt(sb.length() - 1) == ',') {
+                                                            sb.deleteCharAt(sb.length() - 1);
+                                                        }
                                                     }
                                                 } catch (final Exception e) {
                                                     e.printStackTrace();
@@ -137,6 +159,8 @@ public class CO2MonitorDataHttpHandler implements HttpHandler {
         List<Double> ppm = new ArrayList<>();
         List<Double> temperature = new ArrayList<>();
         final Calendar cal = Calendar.getInstance();
+
+        System.out.println(filePath.toAbsolutePath().toString());
         long toSkip = 1;
         for (final String line : Files.readAllLines(filePath)) {
             if (toSkip > 0) {
@@ -148,7 +172,7 @@ public class CO2MonitorDataHttpHandler implements HttpHandler {
                 //10:26:39,649,0.00,0.00
                 final String[] parts = line.split(",");
                 if (parts.length == 4) {
-                    cal.setTime(df.parse(ddMMyyyy + " " + parts[0]));
+                    cal.setTime(dateTimeFormat.parse(ddMMyyyy + " " + parts[0]));
                     final long timeInMillis = cal.getTimeInMillis();
                     if (timeInMillis >= startTimeInMillis && timeInMillis <= endTimeInMillis) {
                         if ((timeInMillis - prev) / 1000 > stepInSeconds && !ppm.isEmpty()) {
