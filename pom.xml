@@ -15,6 +15,14 @@
     <!-- Output to jar format -->
     <packaging>jar</packaging>
 
+    <dependencies>
+        <dependency>
+            <groupId>com.google.guava</groupId>
+            <artifactId>guava</artifactId>
+            <version>22.0</version>
+        </dependency>
+    </dependencies>
+
     <build>
         <finalName>co2monitor-http</finalName>
         <resources>

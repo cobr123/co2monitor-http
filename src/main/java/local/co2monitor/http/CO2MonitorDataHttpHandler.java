@@ -1,5 +1,8 @@
 package local.co2monitor.http;
 
+import com.google.common.cache.CacheBuilder;
+import com.google.common.cache.CacheLoader;
+import com.google.common.cache.LoadingCache;
 import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpHandler;
 
@@ -9,6 +12,7 @@ import java.nio.charset.Charset;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.text.DateFormat;
 import java.text.ParseException;
 import java.text.SimpleDateFormat;
@@ -124,7 +128,7 @@ public class CO2MonitorDataHttpHandler implements HttpHandler {
                                                         if (sb.length() > 1) {
                                                             sb.append(",");
                                                         }
-                                                        readCSVFile(sb, ddMMyyyy, dayFile.toPath(), startTimeInMillis, endTimeInMillis, stepInSeconds);
+                                                        readCSVFile(sb, ddMMyyyy, startTimeInMillis, endTimeInMillis, stepInSeconds);
 
                                                         if (sb.charAt(sb.length() - 1) == ',') {
                                                             sb.deleteCharAt(sb.length() - 1);
@@ -147,10 +151,17 @@ public class CO2MonitorDataHttpHandler implements HttpHandler {
         return sb.toString();
     }
 
+    //данные текущего дня читаем напрямую
+    private static List<Data> getData(final String ddMMyyyy){
+        if(ddMMyyyy.equals(dateFormat.format(new Date()))) {
+            return readCSVFile(ddMMyyyy);
+        } else {
+            return cache.getUnchecked(ddMMyyyy);
+        }
+    }
     private static void readCSVFile(
             final StringBuilder sb
             , final String ddMMyyyy
-            , final Path filePath
             , final long startTimeInMillis
             , final long endTimeInMillis
             , final long stepInSeconds
@@ -158,44 +169,30 @@ public class CO2MonitorDataHttpHandler implements HttpHandler {
         long prev = startTimeInMillis;
         List<Double> ppm = new ArrayList<>();
         List<Double> temperature = new ArrayList<>();
-        final Calendar cal = Calendar.getInstance();
 
-        System.out.println(filePath.toAbsolutePath().toString());
-        long toSkip = 1;
-        for (final String line : Files.readAllLines(filePath)) {
-            if (toSkip > 0) {
-                toSkip--;
-                continue;
-            }
-            try {
-                //Time,Co2(PPM),Temp,RH(%)
-                //10:26:39,649,0.00,0.00
-                final String[] parts = line.split(",");
-                if (parts.length == 4) {
-                    cal.setTime(dateTimeFormat.parse(ddMMyyyy + " " + parts[0]));
-                    final long timeInMillis = cal.getTimeInMillis();
-                    if (timeInMillis >= startTimeInMillis && timeInMillis <= endTimeInMillis) {
-                        if ((timeInMillis - prev) / 1000 > stepInSeconds && !ppm.isEmpty()) {
-                            sb.append("[");
-                            sb.append(timeInMillis);
-                            sb.append(",");
-                            sb.append(ppm.stream().mapToDouble(l -> l).average().getAsDouble());
-                            sb.append(",");
-                            sb.append(temperature.stream().mapToDouble(l -> l).average().getAsDouble());
-                            sb.append("]");
-                            sb.append(",");
+        final List<Data> list = getData(ddMMyyyy);
 
-                            ppm = new ArrayList<>();
-                            temperature = new ArrayList<>();
-                            prev = timeInMillis;
-                        } else {
-                            ppm.add(Double.parseDouble(parts[1]));
-                            temperature.add(Double.parseDouble(parts[2]));
-                        }
-                    }
+        for (final Data data : list) {
+            //Time,Co2(PPM),Temp,RH(%)
+            //10:26:39,649,0.00,0.00
+            if (data.getTimeInMillis() >= startTimeInMillis && data.getTimeInMillis() <= endTimeInMillis) {
+                if ((data.getTimeInMillis() - prev) / 1000 > stepInSeconds && !ppm.isEmpty()) {
+                    sb.append("[");
+                    sb.append(data.getTimeInMillis());
+                    sb.append(",");
+                    sb.append(ppm.stream().mapToDouble(l -> l).average().getAsDouble());
+                    sb.append(",");
+                    sb.append(temperature.stream().mapToDouble(l -> l).average().getAsDouble());
+                    sb.append("]");
+                    sb.append(",");
+
+                    ppm = new ArrayList<>();
+                    temperature = new ArrayList<>();
+                    prev = data.getTimeInMillis();
+                } else {
+                    ppm.add(data.getCO2Ppm());
+                    temperature.add(data.getTemperature());
                 }
-            } catch (final ParseException e) {
-                e.printStackTrace();
             }
         }
         if (!ppm.isEmpty()) {
@@ -208,5 +205,50 @@ public class CO2MonitorDataHttpHandler implements HttpHandler {
             sb.append("]");
             sb.append(",");
         }
+    }
+
+    private static final LoadingCache<String, List<Data>> cache = CacheBuilder.newBuilder().build(
+            new CacheLoader<String, List<Data>>() {
+                @Override
+                public List<Data> load(final String key) {
+                    return readCSVFile(key);
+                }
+            });
+
+    private static List<Data> readCSVFile(final String ddMMyyyy) {
+        final String loggerDir = nvl(System.getenv("co2mini-data-logger"), "d:\\co2mini-data-logger\\");
+        final String[] dateParts = ddMMyyyy.split("\\.");
+        final Path filePath = Paths.get(loggerDir, dateParts[2], dateParts[1], dateParts[0] + ".CSV");
+        System.out.println(filePath.toAbsolutePath().toString());
+
+        final List<Data> list = new ArrayList<>();
+        final Calendar cal = Calendar.getInstance();
+        long toSkip = 1;
+        try {
+            for (final String line : Files.readAllLines(filePath)) {
+                if (toSkip > 0) {
+                    toSkip--;
+                    continue;
+                }
+                try {
+                    //Time,Co2(PPM),Temp,RH(%)
+                    //10:26:39,649,0.00,0.00
+                    final String[] parts = line.split(",");
+                    if (parts.length == 4) {
+                        cal.setTime(dateTimeFormat.parse(ddMMyyyy + " " + parts[0]));
+                        final long timeInMillis = cal.getTimeInMillis();
+                        final double co2ppm = Double.parseDouble(parts[1]);
+                        final double temperature = Double.parseDouble(parts[2]);
+
+                        list.add(new Data(timeInMillis, co2ppm, temperature));
+                    }
+                } catch (final ParseException e) {
+                    e.printStackTrace();
+                }
+            }
+        } catch (final IOException e) {
+            e.printStackTrace();
+        }
+        return list;
     }
 }
