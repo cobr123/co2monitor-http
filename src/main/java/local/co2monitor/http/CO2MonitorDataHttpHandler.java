@@ -17,6 +17,7 @@ import java.text.DateFormat;
 import java.text.ParseException;
 import java.text.SimpleDateFormat;
 import java.util.*;
+import java.util.concurrent.TimeUnit;
 
 /**
  * Created by cobr123 on 05.04.2017.
@@ -154,7 +155,7 @@ public class CO2MonitorDataHttpHandler implements HttpHandler {
     //данные текущего дня читаем напрямую
     private static List<Data> getData(final String ddMMyyyy){
         if(ddMMyyyy.equals(dateFormat.format(new Date()))) {
-            return readCSVFile(ddMMyyyy);
+            return cacheToday.getUnchecked(ddMMyyyy);
         } else {
             return cache.getUnchecked(ddMMyyyy);
         }
@@ -208,6 +209,16 @@ public class CO2MonitorDataHttpHandler implements HttpHandler {
     }
 
     private static final LoadingCache<String, List<Data>> cache = CacheBuilder.newBuilder().build(
+            new CacheLoader<String, List<Data>>() {
+                @Override
+                public List<Data> load(final String key) {
+                    return readCSVFile(key);
+                }
+            });
+
+    private static final LoadingCache<String, List<Data>> cacheToday = CacheBuilder.newBuilder()
+            .expireAfterWrite(1, TimeUnit.MINUTES)
+            .build(
             new CacheLoader<String, List<Data>>() {
                 @Override
                 public List<Data> load(final String key) {
