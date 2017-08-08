@@ -23,6 +23,7 @@ final public class Main {
                 }
             }
         });
+        CO2MonitorDataHttpHandler.getData(0, Long.MAX_VALUE);
         server.createContext("/co2monitor", new CO2MonitorHttpHandler());
         server.createContext("/co2monitor/data", new CO2MonitorDataHttpHandler());
         server.setExecutor(null); // creates a default executor

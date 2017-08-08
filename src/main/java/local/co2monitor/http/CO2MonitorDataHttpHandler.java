@@ -97,6 +97,13 @@ public class CO2MonitorDataHttpHandler implements HttpHandler {
         return !(date.before(getZeroTimeDate(new Date(startTimeInMillis))) || date.after(getZeroTimeDate(new Date(endTimeInMillis))));
     }
 
+    public static String getData(final long startTimeInMillis, final long endTimeInMillis) {
+        final Map<String, String> queryParams = new HashMap<>();
+        queryParams.put("start", "" + startTimeInMillis);
+        queryParams.put("end", "" + endTimeInMillis);
+        return getData(queryParams);
+    }
+
     private static String getData(final Map<String, String> queryParams) {
         final long startTimeInMillis = Long.parseLong(queryParams.getOrDefault("start", "0"));
         final long endTimeInMillis = Long.parseLong(queryParams.getOrDefault("end", "" + Calendar.getInstance().getTimeInMillis()));
@@ -153,13 +160,14 @@ public class CO2MonitorDataHttpHandler implements HttpHandler {
     }
 
     //данные текущего дня читаем напрямую
-    private static List<Data> getData(final String ddMMyyyy){
-        if(ddMMyyyy.equals(dateFormat.format(new Date()))) {
+    private static List<Data> getData(final String ddMMyyyy) {
+        if (ddMMyyyy.equals(dateFormat.format(new Date()))) {
             return cacheToday.getUnchecked(ddMMyyyy);
         } else {
             return cache.getUnchecked(ddMMyyyy);
         }
     }
+
     private static void readCSVFile(
             final StringBuilder sb
             , final String ddMMyyyy
@@ -219,12 +227,12 @@ public class CO2MonitorDataHttpHandler implements HttpHandler {
     private static final LoadingCache<String, List<Data>> cacheToday = CacheBuilder.newBuilder()
             .expireAfterWrite(1, TimeUnit.MINUTES)
             .build(
-            new CacheLoader<String, List<Data>>() {
-                @Override
-                public List<Data> load(final String key) {
-                    return readCSVFile(key);
-                }
-            });
+                    new CacheLoader<String, List<Data>>() {
+                        @Override
+                        public List<Data> load(final String key) {
+                            return readCSVFile(key);
+                        }
+                    });
 
     private static List<Data> readCSVFile(final String ddMMyyyy) {
         final String loggerDir = nvl(System.getenv("co2mini-data-logger"), "d:\\co2mini-data-logger\\");
