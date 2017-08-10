@@ -32,6 +32,7 @@ public class CO2MonitorDataHttpHandler implements HttpHandler {
 
     public void handle(final HttpExchange httpExchange) throws IOException {
         try {
+            System.out.println(httpExchange.getRemoteAddress());
             final String response = getData(queryToMap(httpExchange.getRequestURI().getQuery()));
             httpExchange.getResponseHeaders().set(HEADER_CONTENT_TYPE, String.format("application/json; charset=%s", CHARSET));
             final byte[] rawResponseBody = response.getBytes(CHARSET);
