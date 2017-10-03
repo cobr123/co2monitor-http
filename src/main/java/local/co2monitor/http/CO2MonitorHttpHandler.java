@@ -86,7 +86,7 @@ public class CO2MonitorHttpHandler implements HttpHandler {
             "            type: 'all',\n" +
             "            text: 'All'\n" +
             "        }],\n" +
-            "        inputEnabled: false, // it supports only days\n" +
+            "        inputEnabled: true, // it supports only days\n" +
             "        selected: 0\n" +
             "    },\n" +
             "        xAxis: {\n" +
@@ -148,7 +148,12 @@ public class CO2MonitorHttpHandler implements HttpHandler {
             "    credits: {\n" +
             "      enabled: false\n" +
             "    }\n" +
-            "    });\n" +
+            "    }, function(chart){\n" +
+            "            // apply the date pickers\n" +
+            "            setTimeout(function () {\n" +
+            "                $('input.highcharts-range-selector', $(chart.container).parent()).datepicker();\n" +
+            "            }, 0);\n" +
+            "        });\n" +
             "   chart.xAxis[0].setExtremes(new Date().getTime() - 3600 * 1000, new Date().getTime());\n" +
             "  });\n" +
             "    </script>\n" +
