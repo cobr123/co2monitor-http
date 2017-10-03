@@ -255,7 +255,8 @@ public class CO2MonitorDataHttpHandler implements HttpHandler {
                     //10:26:39,649,0.00,0.00
                     final String[] parts = line.split(",");
                     if (parts.length == 4) {
-                        cal.setTime(dateTimeFormat.parse(ddMMyyyy + " " + parts[0]));
+                        //без trim иногда вылетает java.text.ParseException: Unparseable date
+                        cal.setTime(dateTimeFormat.parse(ddMMyyyy + " " + parts[0].trim()));
                         final long timeInMillis = cal.getTimeInMillis();
                         final double co2ppm = Double.parseDouble(parts[1]);
                         final double temperature = Double.parseDouble(parts[2]);
